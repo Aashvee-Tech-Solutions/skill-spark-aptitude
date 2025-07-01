@@ -74,7 +74,7 @@ const Index = () => {
     <Router>
       <AuthProvider>
         <AppContent />
-      </Router>
+      </AuthProvider>
     </Router>
   );
 };
