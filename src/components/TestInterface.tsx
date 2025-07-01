@@ -5,41 +5,39 @@ import { Clock, Check, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/components/ui/use-toast';
+
+interface Question {
+  id: string;
+  category: string;
+  question: string;
+  options: string[];
+  correct_answer: string;
+  explanation: string;
+  difficulty: string;
+}
 
 const TestInterface = () => {
   const { category } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState('');
-  const [timeRemaining, setTimeRemaining] = useState(3600); // 60 minutes in seconds
+  const [timeRemaining, setTimeRemaining] = useState(3600); // 60 minutes
   const [answers, setAnswers] = useState<string[]>([]);
-
-  // Sample questions - in a real app, these would come from an API
-  const sampleQuestions = [
-    {
-      id: 1,
-      question: "If a train travels at 60 km/h for 2 hours, how far does it travel?",
-      options: ["100 km", "120 km", "140 km", "160 km"],
-      correct: "120 km",
-      explanation: "Distance = Speed × Time = 60 km/h × 2 h = 120 km"
-    },
-    {
-      id: 2,
-      question: "What is 15% of 200?",
-      options: ["25", "30", "35", "40"],
-      correct: "30",
-      explanation: "15% of 200 = (15/100) × 200 = 30"
-    },
-    {
-      id: 3,
-      question: "If x + 5 = 12, what is the value of x?",
-      options: ["5", "6", "7", "8"],
-      correct: "7",
-      explanation: "x + 5 = 12, therefore x = 12 - 5 = 7"
-    }
-  ];
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    fetchQuestions();
+  }, [category]);
+
+  useEffect(() => {
+    if (questions.length === 0) return;
+    
     const timer = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 0) {
@@ -52,7 +50,36 @@ const TestInterface = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [questions]);
+
+  const fetchQuestions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('category', category)
+        .limit(10);
+
+      if (error) throw error;
+
+      const formattedQuestions = data?.map(q => ({
+        ...q,
+        options: Array.isArray(q.options) ? q.options : JSON.parse(q.options)
+      })) || [];
+
+      setQuestions(formattedQuestions);
+      setAnswers(new Array(formattedQuestions.length).fill(''));
+    } catch (error) {
+      console.error('Error fetching questions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load questions",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -69,7 +96,7 @@ const TestInterface = () => {
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestion < sampleQuestions.length - 1) {
+    if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
       setSelectedAnswer(answers[currentQuestion + 1] || '');
     }
@@ -82,18 +109,71 @@ const TestInterface = () => {
     }
   };
 
-  const handleSubmitTest = () => {
-    navigate('/results', { 
-      state: { 
-        answers, 
-        questions: sampleQuestions, 
-        category,
-        timeSpent: 3600 - timeRemaining 
-      } 
-    });
+  const handleSubmitTest = async () => {
+    if (!user) return;
+
+    const correctAnswers = answers.filter((answer, index) => 
+      answer === questions[index].correct_answer
+    ).length;
+
+    const score = Math.round((correctAnswers / questions.length) * 100);
+    const timeSpent = 3600 - timeRemaining;
+
+    try {
+      const { error } = await supabase
+        .from('test_attempts')
+        .insert([{
+          user_id: user.id,
+          category: category || '',
+          questions_data: JSON.stringify(questions),
+          answers: JSON.stringify(answers),
+          score: score,
+          total_questions: questions.length,
+          time_spent: timeSpent
+        }]);
+
+      if (error) throw error;
+
+      // Navigate to results with the test data
+      navigate('/results', { 
+        state: { 
+          answers, 
+          questions, 
+          category,
+          timeSpent,
+          score,
+          correctAnswers
+        } 
+      });
+    } catch (error) {
+      console.error('Error saving test results:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save test results",
+        variant: "destructive"
+      });
+    }
   };
 
-  const progressPercentage = ((currentQuestion + 1) / sampleQuestions.length) * 100;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (questions.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <h2 className="text-2xl font-bold mb-4">No Questions Available</h2>
+        <p className="text-gray-600 mb-4">There are no questions available for this category yet.</p>
+        <Button onClick={() => navigate('/')}>Back to Dashboard</Button>
+      </div>
+    );
+  }
+
+  const progressPercentage = ((currentQuestion + 1) / questions.length) * 100;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -103,7 +183,7 @@ const TestInterface = () => {
           <div className="flex justify-between items-center">
             <div>
               <CardTitle className="text-2xl capitalize">{category} Test</CardTitle>
-              <p className="text-indigo-100">Question {currentQuestion + 1} of {sampleQuestions.length}</p>
+              <p className="text-indigo-100">Question {currentQuestion + 1} of {questions.length}</p>
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
@@ -132,11 +212,11 @@ const TestInterface = () => {
       <Card>
         <CardHeader>
           <CardTitle className="text-xl text-gray-800">
-            {sampleQuestions[currentQuestion].question}
+            {questions[currentQuestion].question}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {sampleQuestions[currentQuestion].options.map((option, index) => (
+          {questions[currentQuestion].options.map((option, index) => (
             <div
               key={index}
               className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
@@ -176,7 +256,7 @@ const TestInterface = () => {
         </Button>
 
         <div className="flex space-x-3">
-          {currentQuestion < sampleQuestions.length - 1 ? (
+          {currentQuestion < questions.length - 1 ? (
             <Button
               onClick={handleNextQuestion}
               disabled={!selectedAnswer}
@@ -204,7 +284,7 @@ const TestInterface = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-10 gap-2">
-            {sampleQuestions.map((_, index) => (
+            {questions.map((_, index) => (
               <button
                 key={index}
                 onClick={() => {

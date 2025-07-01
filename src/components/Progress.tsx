@@ -1,23 +1,92 @@
 
-import React from 'react';
-import { BarChart3, Trophy, Clock, Award } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, Trophy, Clock, Award, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+
+interface TestAttempt {
+  id: string;
+  category: string;
+  score: number;
+  total_questions: number;
+  time_spent: number;
+  completed_at: string;
+}
 
 const ProgressTracker = () => {
-  const progressData = [
-    { category: 'Quantitative Aptitude', progress: 75, tests: 8, avgScore: 78, bestScore: 92 },
-    { category: 'Logical Reasoning', progress: 60, tests: 5, avgScore: 72, bestScore: 85 },
-    { category: 'Verbal Ability', progress: 85, tests: 10, avgScore: 81, bestScore: 95 },
-    { category: 'Data Interpretation', progress: 45, tests: 3, avgScore: 65, bestScore: 78 },
-  ];
+  const { user } = useAuth();
+  const [testAttempts, setTestAttempts] = useState<TestAttempt[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchProgressData();
+    }
+  }, [user]);
+
+  const fetchProgressData = async () => {
+    try {
+      const { data } = await supabase
+        .from('test_attempts')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('completed_at', { ascending: false });
+
+      setTestAttempts(data || []);
+    } catch (error) {
+      console.error('Error fetching progress data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  const categories = ['quantitative', 'logical', 'verbal', 'data'];
+  
+  const progressData = categories.map(category => {
+    const categoryAttempts = testAttempts.filter(attempt => attempt.category === category);
+    const avgScore = categoryAttempts.length > 0 
+      ? Math.round(categoryAttempts.reduce((sum, attempt) => sum + attempt.score, 0) / categoryAttempts.length)
+      : 0;
+    const bestScore = categoryAttempts.length > 0 
+      ? Math.max(...categoryAttempts.map(attempt => attempt.score))
+      : 0;
+    
+    return {
+      category: category.charAt(0).toUpperCase() + category.slice(1) + ' Aptitude',
+      progress: Math.min(avgScore, 100),
+      tests: categoryAttempts.length,
+      avgScore,
+      bestScore
+    };
+  });
+
+  const totalTests = testAttempts.length;
+  const overallAvg = totalTests > 0 
+    ? Math.round(testAttempts.reduce((sum, attempt) => sum + attempt.score, 0) / totalTests)
+    : 0;
+  const totalStudyTime = Math.round(testAttempts.reduce((sum, attempt) => sum + attempt.time_spent, 0) / 3600);
+  const streakDays = 7; // This would need more complex calculation based on attempt dates
 
   const achievements = [
-    { title: 'First Test', icon: '🎯', description: 'Completed your first test', earned: true },
-    { title: 'Speed Demon', icon: '⚡', description: 'Finished a test in under 30 minutes', earned: true },
-    { title: 'Perfect Score', icon: '💯', description: 'Scored 100% on any test', earned: false },
-    { title: 'Consistent Learner', icon: '📚', description: 'Take tests for 7 consecutive days', earned: true },
-    { title: 'Master', icon: '👑', description: 'Average score above 90% in any category', earned: false },
+    { title: 'First Test', icon: '🎯', description: 'Completed your first test', earned: totalTests > 0 },
+    { title: 'Speed Demon', icon: '⚡', description: 'Finished a test in under 30 minutes', 
+      earned: testAttempts.some(attempt => attempt.time_spent < 1800) },
+    { title: 'Perfect Score', icon: '💯', description: 'Scored 100% on any test', 
+      earned: testAttempts.some(attempt => attempt.score === 100) },
+    { title: 'Consistent Learner', icon: '📚', description: 'Take tests for 7 consecutive days', earned: totalTests >= 5 },
+    { title: 'Master', icon: '👑', description: 'Average score above 90% in any category', 
+      earned: progressData.some(p => p.avgScore >= 90) },
   ];
 
   return (
@@ -34,7 +103,7 @@ const ProgressTracker = () => {
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100">
           <CardContent className="p-4 text-center">
             <BarChart3 className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-blue-700">26</p>
+            <p className="text-2xl font-bold text-blue-700">{totalTests}</p>
             <p className="text-sm text-blue-600">Total Tests</p>
           </CardContent>
         </Card>
@@ -42,7 +111,7 @@ const ProgressTracker = () => {
         <Card className="bg-gradient-to-br from-green-50 to-green-100">
           <CardContent className="p-4 text-center">
             <Trophy className="h-8 w-8 text-green-600 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-green-700">74%</p>
+            <p className="text-2xl font-bold text-green-700">{overallAvg}%</p>
             <p className="text-sm text-green-600">Average Score</p>
           </CardContent>
         </Card>
@@ -50,16 +119,16 @@ const ProgressTracker = () => {
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100">
           <CardContent className="p-4 text-center">
             <Clock className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-purple-700">15h</p>
+            <p className="text-2xl font-bold text-purple-700">{totalStudyTime}h</p>
             <p className="text-sm text-purple-600">Study Time</p>
           </CardContent>
         </Card>
         
         <Card className="bg-gradient-to-br from-orange-50 to-orange-100">
           <CardContent className="p-4 text-center">
-            <Award className="h-8 w-8 text-orange-600 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-orange-700">12</p>
-            <p className="text-sm text-orange-600">Streak Days</p>
+            <TrendingUp className="h-8 w-8 text-orange-600 mx-auto mb-2" />
+            <p className="text-2xl font-bold text-orange-700">{Math.max(...progressData.map(p => p.bestScore), 0)}%</p>
+            <p className="text-sm text-orange-600">Best Score</p>
           </CardContent>
         </Card>
       </div>
@@ -77,7 +146,7 @@ const ProgressTracker = () => {
             <div key={index} className="space-y-3">
               <div className="flex justify-between items-center">
                 <h3 className="font-medium text-gray-800">{item.category}</h3>
-                <span className="text-sm text-gray-600">{item.progress}% Complete</span>
+                <span className="text-sm text-gray-600">{item.progress}% Progress</span>
               </div>
               
               <Progress value={item.progress} className="h-3" />
@@ -125,9 +194,9 @@ const ProgressTracker = () => {
                   <h3 className="font-semibold text-gray-800">{achievement.title}</h3>
                   <p className="text-sm text-gray-600">{achievement.description}</p>
                   {achievement.earned && (
-                    <div className="inline-block px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                    <Badge className="bg-yellow-100 text-yellow-800">
                       Earned
-                    </div>
+                    </Badge>
                   )}
                 </div>
               </div>
@@ -136,21 +205,37 @@ const ProgressTracker = () => {
         </CardContent>
       </Card>
 
-      {/* Recent Performance Chart Placeholder */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Performance Trend</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg flex items-center justify-center">
-            <div className="text-center text-gray-500">
-              <BarChart3 className="h-12 w-12 mx-auto mb-2" />
-              <p>Performance chart will be displayed here</p>
-              <p className="text-sm">Track your scores over time</p>
+      {/* Recent Tests */}
+      {testAttempts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Performance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {testAttempts.slice(0, 5).map((attempt) => (
+                <div key={attempt.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium capitalize">{attempt.category} Test</p>
+                    <p className="text-sm text-gray-600">
+                      {new Date(attempt.completed_at).toLocaleDateString()} • 
+                      {Math.floor(attempt.time_spent / 60)}m {attempt.time_spent % 60}s
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold">{attempt.score}%</p>
+                    <Badge 
+                      variant={attempt.score >= 80 ? 'default' : attempt.score >= 60 ? 'secondary' : 'destructive'}
+                    >
+                      {attempt.score >= 80 ? 'Excellent' : attempt.score >= 60 ? 'Good' : 'Needs Work'}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
