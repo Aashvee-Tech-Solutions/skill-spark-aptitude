@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Users, BookOpen, BarChart3, Upload, Trash2, Edit } from 'lucide-react';
+import { Plus, Users, BookOpen, BarChart3, Trash2 } from 'lucide-react';
 
 interface Question {
   id: string;
@@ -26,7 +26,7 @@ interface Question {
 interface User {
   id: string;
   email: string;
-  full_name: string;
+  full_name: string | null;
   role: string;
   created_at: string;
 }
@@ -39,7 +39,7 @@ interface TestAttempt {
   total_questions: number;
   time_spent: number;
   completed_at: string;
-  profiles: { full_name: string; email: string };
+  profiles: { full_name: string | null; email: string } | null;
 }
 
 const AdminDashboard = () => {
@@ -69,25 +69,31 @@ const AdminDashboard = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
+      // Parse options for each question
+      const formattedQuestions = questionsData?.map(q => ({
+        ...q,
+        options: Array.isArray(q.options) ? q.options : JSON.parse(q.options as string)
+      })) || [];
+
       // Fetch users
       const { data: usersData } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      // Fetch test attempts with user data
+      // Fetch test attempts with user data using proper join
       const { data: attemptsData } = await supabase
         .from('test_attempts')
         .select(`
           *,
-          profiles:user_id (
+          profiles!inner (
             full_name,
             email
           )
         `)
         .order('completed_at', { ascending: false });
 
-      setQuestions(questionsData || []);
+      setQuestions(formattedQuestions);
       setUsers(usersData || []);
       setTestAttempts(attemptsData || []);
     } catch (error) {
@@ -114,12 +120,24 @@ const AdminDashboard = () => {
       return;
     }
 
+    // Filter out empty options
+    const validOptions = newQuestion.options.filter(opt => opt.trim() !== '');
+    
+    if (validOptions.length < 2) {
+      toast({
+        title: "Error",
+        description: "Please provide at least 2 options",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('questions')
         .insert([{
           ...newQuestion,
-          options: JSON.stringify(newQuestion.options.filter(opt => opt.trim() !== ''))
+          options: JSON.stringify(validOptions)
         }]);
 
       if (error) throw error;
@@ -361,7 +379,7 @@ const AdminDashboard = () => {
                   </div>
                   <p className="font-medium mb-2">{question.question}</p>
                   <div className="text-sm text-gray-600">
-                    <p><strong>Options:</strong> {JSON.parse(question.options).join(', ')}</p>
+                    <p><strong>Options:</strong> {question.options.join(', ')}</p>
                     <p><strong>Correct:</strong> {question.correct_answer}</p>
                     {question.explanation && (
                       <p><strong>Explanation:</strong> {question.explanation}</p>

@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface LeaderboardEntry {
   user_id: string;
-  full_name: string;
+  full_name: string | null;
   email: string;
   category?: string;
   avg_score: number;
@@ -32,80 +32,77 @@ const Leaderboard = () => {
 
   const fetchLeaderboardData = async () => {
     try {
-      // Fetch overall leaderboard
-      const { data: overallData, error: overallError } = await supabase.rpc('get_overall_leaderboard');
-      
-      if (overallError) {
-        console.error('Error fetching overall leaderboard:', overallError);
-        // Fallback query if RPC doesn't exist
-        const { data: attempts } = await supabase
-          .from('test_attempts')
-          .select(`
-            user_id,
-            score,
-            profiles:user_id (
-              full_name,
-              email
-            )
-          `);
+      // Fetch overall leaderboard with proper join
+      const { data: attempts, error: attemptsError } = await supabase
+        .from('test_attempts')
+        .select(`
+          user_id,
+          score,
+          profiles!inner (
+            full_name,
+            email
+          )
+        `);
 
-        const userStats = attempts?.reduce((acc, attempt) => {
-          const userId = attempt.user_id;
-          if (!acc[userId]) {
-            acc[userId] = {
-              user_id: userId,
-              full_name: attempt.profiles?.full_name || '',
-              email: attempt.profiles?.email || '',
-              total_score: 0,
-              total_attempts: 0,
-              best_score: 0
-            };
-          }
-          
-          acc[userId].total_score += attempt.score;
-          acc[userId].total_attempts += 1;
-          acc[userId].best_score = Math.max(acc[userId].best_score, attempt.score);
-          
-          return acc;
-        }, {} as any) || {};
-
-        const overallLeaderboard = Object.values(userStats)
-          .map((stats: any, index) => ({
-            ...stats,
-            avg_score: Math.round(stats.total_score / stats.total_attempts),
-            rank: index + 1
-          }))
-          .sort((a: any, b: any) => b.avg_score - a.avg_score)
-          .map((entry: any, index) => ({ ...entry, rank: index + 1 }));
-
-        setOverallLeaderboard(overallLeaderboard);
-      } else {
-        setOverallLeaderboard(overallData || []);
+      if (attemptsError) {
+        console.error('Error fetching test attempts:', attemptsError);
+        setLoading(false);
+        return;
       }
+
+      const userStats = attempts?.reduce((acc: any, attempt: any) => {
+        const userId = attempt.user_id;
+        if (!acc[userId]) {
+          acc[userId] = {
+            user_id: userId,
+            full_name: attempt.profiles?.full_name || null,
+            email: attempt.profiles?.email || '',
+            total_score: 0,
+            total_attempts: 0,
+            best_score: 0
+          };
+        }
+        
+        acc[userId].total_score += attempt.score;
+        acc[userId].total_attempts += 1;
+        acc[userId].best_score = Math.max(acc[userId].best_score, attempt.score);
+        
+        return acc;
+      }, {}) || {};
+
+      const overallLeaderboard = Object.values(userStats)
+        .map((stats: any) => ({
+          ...stats,
+          avg_score: Math.round(stats.total_score / stats.total_attempts)
+        }))
+        .sort((a: any, b: any) => b.avg_score - a.avg_score)
+        .map((entry: any, index) => ({ ...entry, rank: index + 1 }));
+
+      setOverallLeaderboard(overallLeaderboard);
 
       // Fetch category leaderboards
       const categories = ['quantitative', 'logical', 'verbal', 'data'];
       const categoryData: { [key: string]: LeaderboardEntry[] } = {};
 
       for (const category of categories) {
-        const { data } = await supabase
+        const { data: categoryAttempts } = await supabase
           .from('test_attempts')
           .select(`
             user_id,
             score,
-            profiles:user_id (
+            profiles!inner (
               full_name,
               email
             )
           `)
           .eq('category', category);
 
-        const userStats = data?.reduce((acc, attempt) => {
+        const categoryUserStats = categoryAttempts?.reduce((acc: any, attempt: any) => {
           const userId = attempt.user_id;
           if (!acc[userId]) {
             acc[userId] = {
               user_id: userId,
-              full_name: attempt.profiles?.full_name || '',
+              full_name: attempt.profiles?.full_name || null,
               email: attempt.profiles?.email || '',
               category,
               total_score: 0,
@@ -119,9 +116,9 @@ const Leaderboard = () => {
           acc[userId].best_score = Math.max(acc[userId].best_score, attempt.score);
           
           return acc;
-        }, {} as any) || {};
+        }, {}) || {};
 
-        categoryData[category] = Object.values(userStats)
+        categoryData[category] = Object.values(categoryUserStats)
           .map((stats: any) => ({
             ...stats,
             avg_score: Math.round(stats.total_score / stats.total_attempts)

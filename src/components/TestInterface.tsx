@@ -64,7 +64,7 @@ const TestInterface = () => {
 
       const formattedQuestions = data?.map(q => ({
         ...q,
-        options: Array.isArray(q.options) ? q.options : JSON.parse(q.options)
+        options: Array.isArray(q.options) ? q.options : JSON.parse(q.options as string)
       })) || [];
 
       setQuestions(formattedQuestions);
