@@ -81,21 +81,27 @@ const AdminDashboard = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      // Fetch test attempts with user data using proper join
+      // Fetch test attempts
       const { data: attemptsData } = await supabase
         .from('test_attempts')
-        .select(`
-          *,
-          profiles!inner (
-            full_name,
-            email
-          )
-        `)
+        .select('*')
         .order('completed_at', { ascending: false });
+
+      // Manually join with profiles data
+      const attemptsWithProfiles = attemptsData?.map(attempt => {
+        const userProfile = usersData?.find(user => user.id === attempt.user_id);
+        return {
+          ...attempt,
+          profiles: userProfile ? {
+            full_name: userProfile.full_name,
+            email: userProfile.email
+          } : null
+        };
+      }) || [];
 
       setQuestions(formattedQuestions);
       setUsers(usersData || []);
-      setTestAttempts(attemptsData || []);
+      setTestAttempts(attemptsWithProfiles);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
