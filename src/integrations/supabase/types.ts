@@ -9,6 +9,180 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      course_content: {
+        Row: {
+          content_data: Json
+          content_type: string
+          course_id: string | null
+          created_at: string
+          id: string
+          is_required: boolean | null
+          order_index: number
+          title: string
+        }
+        Insert: {
+          content_data?: Json
+          content_type: string
+          course_id?: string | null
+          created_at?: string
+          id?: string
+          is_required?: boolean | null
+          order_index?: number
+          title: string
+        }
+        Update: {
+          content_data?: Json
+          content_type?: string
+          course_id?: string | null
+          created_at?: string
+          id?: string
+          is_required?: boolean | null
+          order_index?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_content_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_enrollments: {
+        Row: {
+          completed_at: string | null
+          course_id: string | null
+          enrolled_at: string
+          id: string
+          progress: number | null
+          user_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          course_id?: string | null
+          enrolled_at?: string
+          id?: string
+          progress?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          course_id?: string | null
+          enrolled_at?: string
+          id?: string
+          progress?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_enrollments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_enrollments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_tests: {
+        Row: {
+          course_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          max_attempts: number | null
+          passing_score: number | null
+          time_limit: number | null
+          title: string
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_attempts?: number | null
+          passing_score?: number | null
+          time_limit?: number | null
+          title: string
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_attempts?: number | null
+          passing_score?: number | null
+          time_limit?: number | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_tests_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      courses: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          difficulty: string | null
+          duration_hours: number | null
+          id: string
+          is_active: boolean | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          difficulty?: string | null
+          duration_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          difficulty?: string | null
+          duration_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "courses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -40,6 +214,7 @@ export type Database = {
         Row: {
           category: string
           correct_answer: string
+          course_test_id: string | null
           created_at: string | null
           created_by: string | null
           difficulty: string | null
@@ -51,6 +226,7 @@ export type Database = {
         Insert: {
           category: string
           correct_answer: string
+          course_test_id?: string | null
           created_at?: string | null
           created_by?: string | null
           difficulty?: string | null
@@ -62,6 +238,7 @@ export type Database = {
         Update: {
           category?: string
           correct_answer?: string
+          course_test_id?: string | null
           created_at?: string | null
           created_by?: string | null
           difficulty?: string | null
@@ -70,7 +247,15 @@ export type Database = {
           options?: Json
           question?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "questions_course_test_id_fkey"
+            columns: ["course_test_id"]
+            isOneToOne: false
+            referencedRelation: "course_tests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       test_attempts: {
         Row: {

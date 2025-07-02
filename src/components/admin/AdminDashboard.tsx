@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { Plus, Users, BookOpen, BarChart3, Trash2 } from 'lucide-react';
+import CourseManagement from './CourseManagement';
 
 interface Question {
   id: string;
@@ -256,12 +257,17 @@ const AdminDashboard = () => {
         </Card>
       </div>
 
-      <Tabs defaultValue="questions" className="space-y-4">
+      <Tabs defaultValue="courses" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="courses">Courses</TabsTrigger>
           <TabsTrigger value="questions">Questions</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="results">Test Results</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="courses">
+          <CourseManagement />
+        </TabsContent>
 
         <TabsContent value="questions" className="space-y-4">
           <Card>
